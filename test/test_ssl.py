@@ -4,7 +4,15 @@ import time
 import psycopg
 import pytest
 
-from .utils import MACOS, PG_MAJOR_VERSION, TEST_DIR, TLS_SUPPORT, WINDOWS, Bouncer
+from .utils import (
+    DIRECT_TLS_SUPPORT,
+    MACOS,
+    PG_MAJOR_VERSION,
+    TEST_DIR,
+    TLS_SUPPORT,
+    WINDOWS,
+    Bouncer,
+)
 
 if not TLS_SUPPORT:
     pytest.skip(allow_module_level=True)
@@ -434,3 +442,16 @@ def test_servers_disconnect_when_changing_sslmode(bouncer, pg, cert_dir):
         ):
             bouncer.admin("RELOAD")
             cur.execute("SELECT 1")
+
+@pytest.mark.skipif(
+    "not DIRECT_TLS_SUPPORT", reason="Direct TLS is introduced in PG 17"
+)
+def test_client_direct_ssl(bouncer, cert_dir):
+    root = cert_dir / "TestCA1" / "ca.crt"
+    key = cert_dir / "TestCA1" / "sites" / "01-localhost.key"
+    cert = cert_dir / "TestCA1" / "sites" / "01-localhost.crt"
+    bouncer.admin(f"set client_tls_key_file = '{key}'")
+    bouncer.admin(f"set client_tls_cert_file = '{cert}'")
+    bouncer.admin(f"set client_tls_ca_file = '{root}'")
+    bouncer.admin("set client_tls_sslmode = require")
+    bouncer.psql_test(host="localhost", sslmode="require", sslnegotiation="direct")

@@ -171,6 +171,7 @@ def get_tls_support():
 
 
 TLS_SUPPORT = get_tls_support()
+DIRECT_TLS_SUPPORT = TLS_SUPPORT and PG_MAJOR_VERSION >= 17
 
 
 # this is out of ephemeral port range for many systems hence
@@ -667,7 +668,7 @@ class Postgres(QueryRunner):
     def initdb(self):
         run(
             f"initdb -A trust --nosync --username postgres --pgdata {self.pgdata}",
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.STDOUT,
         )
 
         with self.conf_path.open(mode="a") as pgconf:
