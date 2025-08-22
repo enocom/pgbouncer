@@ -245,6 +245,9 @@ int tls_configure(struct tls *ctx, struct tls_config *config)
 	if ((ctx->flags & TLS_SERVER) != 0)
 		return (tls_configure_server(ctx));
 
+	if ((ctx->flags & TLS_CLIENT) != 0)
+		return (tls_configure_client(ctx));
+
 	return (0);
 }
 

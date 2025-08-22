@@ -1159,12 +1159,14 @@ static struct tls_config *client_accept_conf;
 int client_accept_sslmode;
 static struct tls_config *server_connect_conf;
 int server_connect_sslmode;
+int server_connect_sslnegotiation;
 
 /*
  * TLS setup
  */
 
-static bool setup_tls(struct tls_config *conf, const char *pfx, int sslmode,
+static bool setup_tls(struct tls_config *conf, const char *pfx,
+		      int sslmode, int sslnegotiation,
 		      const char *protocols, const char *ciphers, const char *ciphers13,
 		      const char *keyfile, const char *certfile, const char *cafile,
 		      const char *dheparams, const char *ecdhecurve,
@@ -1231,6 +1233,9 @@ static bool setup_tls(struct tls_config *conf, const char *pfx, int sslmode,
 	}
 
 	if (does_connect) {
+		if (sslmode > SSLMODE_DISABLED && sslnegotiation == SSLNEGOTIATION_DIRECT) {
+			tls_config_sslnegotiation_direct(conf);
+		}
 		/* TLS client, check server? */
 		if (sslmode == SSLMODE_VERIFY_FULL) {
 			tls_config_verify(conf);
@@ -1257,7 +1262,10 @@ static bool setup_tls(struct tls_config *conf, const char *pfx, int sslmode,
 
 static bool tls_change_requires_reconnect(struct tls_config *new_server_connect_conf)
 {
-	if (server_connect_sslmode != cf_server_tls_sslmode) {
+	if (server_connect_sslnegotiation != cf_server_tls_sslnegotiation) {
+		log_noise("new server_tls_sslnegotiation detected");
+		return true;
+	} else if (server_connect_sslmode != cf_server_tls_sslmode) {
 		log_noise("new server_tls_sslmode detected");
 		return true;
 	} else if (server_connect_conf == NULL) {
@@ -1318,6 +1326,7 @@ bool sbuf_tls_setup(void)
 		}
 
 		if (!setup_tls(new_server_connect_conf, "server_tls", cf_server_tls_sslmode,
+			       cf_server_tls_sslnegotiation,
 			       cf_server_tls_protocols, cf_server_tls_ciphers, cf_server_tls13_ciphers,
 			       cf_server_tls_key_file, cf_server_tls_cert_file,
 			       cf_server_tls_ca_file, "", "", true))
@@ -1332,6 +1341,7 @@ bool sbuf_tls_setup(void)
 		}
 
 		if (!setup_tls(new_client_accept_conf, "client_tls", cf_client_tls_sslmode,
+			       false,
 			       cf_client_tls_protocols, cf_client_tls_ciphers, cf_client_tls13_ciphers,
 			       cf_client_tls_key_file, cf_client_tls_cert_file,
 			       cf_client_tls_ca_file, cf_client_tls_dheparams,
@@ -1374,6 +1384,7 @@ bool sbuf_tls_setup(void)
 	client_accept_sslmode = cf_client_tls_sslmode;
 	server_connect_conf = new_server_connect_conf;
 	server_connect_sslmode = cf_server_tls_sslmode;
+	server_connect_sslnegotiation = cf_server_tls_sslnegotiation;
 	return true;
 failed:
 	usual_tls_free(new_client_accept_base);

@@ -691,7 +691,10 @@ static bool handle_connect(PgSocket *server)
 		disconnect_server(server, false, "peer server was not necessary anymore, because client cancel connection was already closed");
 	} else {
 		/* proceed with login */
-		if (server_connect_sslmode > SSLMODE_DISABLED && !is_unix) {
+		if (cf_server_tls_sslnegotiation && server_connect_sslmode > SSLMODE_DISABLED && !is_unix) {
+			slog_noise(server, "P: direct SSL request");
+			res = sbuf_tls_connect(&server->sbuf, server->host);
+		} else if (server_connect_sslmode > SSLMODE_DISABLED && !is_unix) {
 			slog_noise(server, "P: SSL request");
 			res = send_sslreq_packet(server);
 			if (res)
@@ -775,6 +778,7 @@ bool server_proto(SBuf *sbuf, SBufEvent evtype, struct MBuf *data)
 		disconnect_client(server->link, false, "unexpected eof");
 		break;
 	case SBUF_EV_READ:
+		// TODO insert ssl negotation here
 		if (server->wait_sslchar) {
 			res = handle_sslchar(server, data);
 			break;

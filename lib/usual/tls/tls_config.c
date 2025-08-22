@@ -132,6 +132,8 @@ struct tls_config *tls_config_new(void)
 	tls_config_set_protocols(config, TLS_PROTOCOLS_DEFAULT);
 	tls_config_set_verify_depth(config, 6);
 
+	tls_config_sslnegotiation_postgres(config);
+
 	tls_config_prefer_ciphers_server(config);
 
 	tls_config_verify(config);
@@ -456,6 +458,16 @@ void tls_config_verify_client(struct tls_config *config)
 void tls_config_verify_client_optional(struct tls_config *config)
 {
 	config->verify_client = 2;
+}
+
+void tls_config_sslnegotiation_postgres(struct tls_config *config)
+{
+	config->sslnegotiation_direct = 0;
+}
+
+void tls_config_sslnegotiation_direct(struct tls_config *config)
+{
+	config->sslnegotiation_direct = 1;
 }
 
 #endif /* USUAL_LIBSSL_FOR_TLS */

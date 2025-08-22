@@ -15,6 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "openssl/ssl.h"
 #include "tls_compat.h"
 
 #ifdef USUAL_LIBSSL_FOR_TLS
@@ -36,6 +37,28 @@ struct tls *tls_client(void)
 	ctx->flags |= TLS_CLIENT;
 
 	return (ctx);
+}
+
+#define PG_ALPN_PROTOCOL_VECTOR { 10, 'p', 'o', 's', 't', 'g', 'r', 'e', 's', 'q', 'l' }
+static const unsigned char alpn_protos[] = PG_ALPN_PROTOCOL_VECTOR;
+
+int tls_configure_client(struct tls *ctx)
+{
+	if (ctx->config->sslnegotiation_direct) {
+		/*
+		 * SSL_CTX_set_alpn_protos() returns 0 on success, and non-0 on
+		 * failure.
+		 *
+		 * See https://docs.openssl.org/master/man3/SSL_CTX_set_alpn_select_cb/#notes
+		 */
+		if (SSL_CTX_set_alpn_protos(ctx->ssl_ctx, alpn_protos, sizeof(alpn_protos))) {
+			tls_set_errorx(ctx, "failed to set ALPN protos for direct SSL");
+			goto err;
+		}
+	}
+	return (0);
+err:
+	return (-1);
 }
 
 int tls_connect(struct tls *ctx, const char *host, const char *port)

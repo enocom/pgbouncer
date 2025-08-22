@@ -68,6 +68,7 @@ struct tls_config {
 	int verify_depth;
 	int verify_name;
 	int verify_time;
+	int sslnegotiation_direct;
 };
 
 struct tls_conninfo {
@@ -134,6 +135,7 @@ int tls_check_name(struct tls *ctx, X509 *cert, const char *servername);
 int tls_configure_keypair(struct tls *ctx, SSL_CTX *ssl_ctx,
 			  struct tls_keypair *keypair, int required);
 int tls_configure_server(struct tls *ctx);
+int tls_configure_client(struct tls *ctx);
 int tls_configure_ssl(struct tls *ctx);
 int tls_configure_ssl_verify(struct tls *ctx, int verify);
 int tls_handshake_client(struct tls *ctx);

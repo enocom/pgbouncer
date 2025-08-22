@@ -113,6 +113,7 @@ extern int client_accept_sslmode;
  * Same as client_accept_sslmode, but for server connections.
  */
 extern int server_connect_sslmode;
+extern int server_connect_sslnegotiation;
 
 bool sbuf_tls_setup(void);
 bool sbuf_tls_accept(SBuf *sbuf)  _MUSTCHECK;
