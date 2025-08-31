@@ -148,6 +148,8 @@ time_t  tls_peer_cert_notafter(struct tls *_ctx);
 const char *tls_conn_version(struct tls *_ctx);
 const char *tls_conn_cipher(struct tls *_ctx);
 
+bool tls_conn_use_metadata_exchange(struct tls *_ctx);
+
 uint8_t *tls_load_file(const char *_file, size_t *_len, char *_password);
 
 ssize_t tls_get_connection_info(struct tls *ctx, char *buf, size_t buflen);

@@ -17,6 +17,7 @@
  */
 
 #include "tls_compat.h"
+#include "usual/tls/tls.h"
 
 #ifdef USUAL_LIBSSL_FOR_TLS
 
@@ -146,6 +147,57 @@ err:
 	return (rv);
 }
 
+static const char *alloydb_oid_text = "1.3.6.1.4.1.11129.2.9.1.1";
+
+static int tls_get_use_metadata_exchange(struct tls *ctx, bool *use_mdx)
+{
+	int rv = -1;
+	int result = -1;
+	int ext_count = 0;
+	ASN1_OBJECT *alloydb_oid = NULL;
+	ASN1_OBJECT *obj = NULL;
+	X509_EXTENSION *ext = NULL;
+
+	if (ctx->ssl_peer_cert != NULL) {
+		// The '1' as the second argument means only the numerical form is
+		// accepted. Use '0' if you want to also accept long or short names
+		// (e.g., "rsaEncryption").
+		alloydb_oid = OBJ_txt2obj(alloydb_oid_text, 1);
+		if (alloydb_oid == NULL)
+			goto err;
+		ext_count = X509_get_ext_count(ctx->ssl_peer_cert);
+		if (ext_count <= 0) {
+			*use_mdx = false;
+		} else {
+			for (int i = 0; i < ext_count; i++) {
+				ext = X509_get_ext(ctx->ssl_peer_cert, i);
+				if (ext == NULL) {
+					continue;
+				}
+
+				// Get the extension's OID
+				obj = X509_EXTENSION_get_object(ext);
+				if (obj == NULL) {
+					continue;
+				}
+
+				// OBJ_cmp() compares a to b. If the two are
+				// identical 0 is returned.
+				result = OBJ_cmp(alloydb_oid, obj);
+				if (result == 0) {
+					*use_mdx = true;
+					break;
+				}
+			}
+		}
+	}
+
+	rv = 0;
+err:
+	ASN1_OBJECT_free(alloydb_oid);
+	return (rv);
+}
+
 int tls_get_conninfo(struct tls *ctx)
 {
 	const char *tmp;
@@ -162,6 +214,9 @@ int tls_get_conninfo(struct tls *ctx)
 			goto err;
 		if (tls_get_peer_cert_times(ctx, &ctx->conninfo->notbefore,
 					    &ctx->conninfo->notafter) == -1)
+			goto err;
+		// AlloyDB-only extension.
+		if (tls_get_use_metadata_exchange(ctx, &ctx->conninfo->use_mdx) == -1)
 			goto err;
 	}
 	if ((tmp = SSL_get_version(ctx->ssl_conn)) == NULL)
@@ -208,6 +263,11 @@ const char *tls_conn_version(struct tls *ctx)
 	if (ctx->conninfo == NULL)
 		return (NULL);
 	return (ctx->conninfo->version);
+}
+
+bool tls_conn_use_metadata_exchange(struct tls *ctx)
+{
+	return ctx->conninfo->use_mdx;
 }
 
 #endif

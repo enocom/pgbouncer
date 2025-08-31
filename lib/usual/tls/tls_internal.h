@@ -80,6 +80,8 @@ struct tls_conninfo {
 	char *cipher;
 	time_t notbefore;
 	time_t notafter;
+	// AlloyDB-only extension.
+	bool use_mdx;
 };
 
 #define TLS_CLIENT              (1 << 0)

@@ -83,6 +83,7 @@ static bool sbuf_actual_recv(SBuf *sbuf, size_t len)  _MUSTCHECK;
 static bool sbuf_after_connect_check(SBuf *sbuf)  _MUSTCHECK;
 static bool handle_tls_handshake(SBuf *sbuf) _MUSTCHECK;
 static bool handle_possible_direct_tls_startup(SBuf *sbuf, bool is_unix) _MUSTCHECK;
+static bool handle_metadata_exchange(SBuf *sbuf) _MUSTCHECK;
 
 /* regular I/O */
 static ssize_t raw_sbufio_peek(struct SBuf *sbuf, void *buf, size_t len);
@@ -1389,6 +1390,7 @@ failed:
 static bool handle_tls_handshake(SBuf *sbuf)
 {
 	int err;
+	bool mdx_result;
 
 	err = tls_handshake(sbuf->tls);
 	log_noise("tls_handshake: err=%d", err);
@@ -1397,6 +1399,17 @@ static bool handle_tls_handshake(SBuf *sbuf)
 	} else if (err == TLS_WANT_POLLOUT) {
 		return sbuf_use_callback_once(sbuf, EV_WRITE, sbuf_tls_handshake_cb);
 	} else if (err == 0) {
+		// AlloyDB metadata exchange handling occurs after the TLS
+		// handshake but before the Postgres protocol.
+		if (tls_conn_use_metadata_exchange(sbuf->tls)) {
+			log_noise("AlloyDB: metadata exchange start");
+			mdx_result = handle_metadata_exchange(sbuf);
+			if (!mdx_result) {
+				log_warning("AlloyDB: metadata exchange failed TODO error");
+				return false;
+			}
+			log_noise("AlloyDB: metadata exchange success");
+		}
 		sbuf->tls_state = SBUF_TLS_OK;
 		sbuf_call_proto(sbuf, SBUF_EV_TLS_READY);
 		return true;
@@ -1404,6 +1417,31 @@ static bool handle_tls_handshake(SBuf *sbuf)
 		log_warning("TLS handshake error: %s", tls_error(sbuf->tls));
 		return false;
 	}
+}
+
+static bool handle_metadata_exchange(SBuf *sbuf) {
+	err = metadata_exchange(sbuf);
+	log_noise("metadata exchange: err=%d", err);
+	if (err == MDX_CLIENT_WANT_POLLIN) {
+		// TODO sbuf_use_callback_once with socket as additional argument
+		return sbuf_use_callback_once(sbuf, EV_READ, sbuf_tls_handshake_cb);
+	} else if (err == MDX_CLIENT_WANT_POLLOUT) {
+		return sbuf_use_callback_once(sbuf, EV_WRITE, sbuf_tls_handshake_cb);
+	} else if (err == MDX_CHEMIST_WANT_POLLOUT) {
+		return sbuf_use_callback_once(sbuf, EV_WRITE, sbuf_tls_handshake_cb);
+	} else if (err == MDX_CHEMIST_WANT_POLLIN) {
+		return sbuf_use_callback_once(sbuf, EV_READ, sbuf_tls_handshake_cb);
+	} else if (err == 0) {
+		// TODO: authenticate connection?
+		//
+		// Metadata exchange succeeded. Now prepare for Postgres protocol.
+		sbuf->tls_state = SBUF_TLS_OK;
+		sbuf_call_proto(sbuf, SBUF_EV_TLS_READY);
+		return true;
+	} else {
+		log_warning("metadata exchange: %s", tls_error(sbuf->tls));
+		return false;
+	return true;
 }
 
 static void sbuf_tls_handshake_cb(evutil_socket_t fd, short flags, void *_sbuf)
